@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>libroboclaw</name>
+  <version>0.0.0</version>
+  <description>Roboclaw comms library</description>
+
+  <maintainer email="achille.verheye@gmail.com">Achille</maintainer>
+
+  <license>MIT</license>
+
+  <author email="achille.verheye@gmail.com">Achille</author>
+  <author email="vancecs@gmail.com">Carroll Vance</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_export_depend>roscpp</build_export_depend>
+  <exec_depend>roscpp</exec_depend>
+
+
+  <export>
+  </export>
+</package>
