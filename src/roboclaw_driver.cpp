@@ -220,7 +220,7 @@ namespace libroboclaw {
     std::pair<double, double> driver::get_duty_cycle(const unsigned char address){
         std::pair<int, int> pwm;
         std::pair<double, double> duty_cycle;
-        double max_pwm = 32767;  // Refer to roboclaw user manual for this parameter
+        double max_pwm = 32767;  // Maximum absolute pwm value. Refer to roboclaw user manual for more information. 
 
         pwm = get_pwm(address);
         duty_cycle.first = 100.0 * (double) pwm.first/max_pwm;
