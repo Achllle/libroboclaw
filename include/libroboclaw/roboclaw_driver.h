@@ -38,12 +38,24 @@ namespace libroboclaw {
     public:
         driver(std::string port, unsigned int baudrate);
 
+        // Getters
         std::string get_version(unsigned char address);
 
         std::pair<int, int> get_encoders(unsigned char address);
 
         std::pair<int, int> get_velocity(unsigned char address);
 
+        /**
+         * Get the pwm values of the 2 motors at a given address
+         */
+        std::pair<int, int> get_pwm(const unsigned char address);
+        
+        /**
+         * Get the percentage duty cycle of the 2 motors at a given address
+         */
+        std::pair<double, double> get_duty_cycle(const unsigned char address);
+
+        // Setters
         void set_velocity(unsigned char address, std::pair<int, int> speed);
 
         void set_duty(unsigned char address, std::pair<int, int> duty);

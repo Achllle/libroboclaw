@@ -202,6 +202,33 @@ namespace libroboclaw {
         return std::pair<int, int>((int) (int32_t) e1, (int) (int32_t) e2);
     }
 
+    std::pair<int, int> driver::get_pwm(const unsigned char address){
+        unsigned char rx_buffer[4];
+        uint16_t pwm_1 = 0;
+        uint16_t pwm_2 = 0;
+        
+        txrx(address, 48, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
+
+        pwm_1 += rx_buffer[0] << 8;
+        pwm_1 += rx_buffer[1];
+        pwm_2 += rx_buffer[2] << 8;
+        pwm_2 += rx_buffer[3];
+
+        return std::pair<int, int>((int) (int16_t) pwm_1, (int) (int16_t) pwm_2);
+    }
+
+    std::pair<double, double> driver::get_duty_cycle(const unsigned char address){
+        std::pair<int, int> pwm;
+        std::pair<double, double> duty_cycle;
+        double max_pwm = 32767;  // Maximum absolute pwm value. Refer to roboclaw user manual for more information. 
+
+        pwm = get_pwm(address);
+        duty_cycle.first = 100.0 * (double) pwm.first/max_pwm;
+        duty_cycle.second = 100.0 * (double) pwm.second/max_pwm;
+
+        return duty_cycle;
+    }
+
     void driver::reset_encoders(unsigned char address) {
         unsigned char rx_buffer[1];
         txrx(address, 20, nullptr, 0, rx_buffer, sizeof(rx_buffer), true, false);
