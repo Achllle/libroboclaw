@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 configure_file(libroboclawConfig.h.in libroboclawConfig.h)
 
+find_package(Boost 1.55.0 REQUIRED COMPONENTS system filesystem)
+
 ############################################################
 # Create a library
 ############################################################
@@ -19,11 +21,13 @@ add_library(libroboclaw
     src/TimeoutSerial.cpp
 )
 
-target_link_libraries(libroboclaw gtest pthread)
+target_link_libraries(libroboclaw gtest pthread ${Boost_LIBRARIES})
 
 target_include_directories(libroboclaw
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
+    PRIVATE
+        ${Boost_INCLUDE_DIRS}
 )
 
 ############################################################

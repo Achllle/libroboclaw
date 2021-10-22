@@ -10,7 +10,7 @@ based on [this repo](https://github.com/csvance/roboclaw).
 ```
 git clone https://github.com/Achllle/libroboclaw.git
 mkdir build && cd build
-cmake ../libroboclaw
+cmake ..
 make
 ```
 
