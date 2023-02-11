@@ -22,9 +22,23 @@ int main(int argc, char *argv[]) {
             << "..." << std::endl;
   libroboclaw::driver *roboclaw_connections;
   roboclaw_connections = new libroboclaw::driver(serial_port, baudrate);
+
+  // get encoder values
   std::pair<int, int> enc_res = roboclaw_connections->get_encoders(addr);
   std::cout << "encoders: M1: " << enc_res.first << ", M2: " << enc_res.second << std::endl;
-//   std::cout << roboclaw_connections->get_version(addr) << std::endl;  // broken
+
+  // get pwm
+  std::pair<int, int> pwm_res = roboclaw_connections->get_pwm(addr);
+  std::cout << "pwm values: M1: " << pwm_res.first << ", M2: " << pwm_res.second << std::endl;
+
+  // get duty cycle
+  std::pair<double, double> duty_res = roboclaw_connections->get_duty_cycle(addr);
+  std::cout << "duty cycle: M1: " << duty_res.first << ", M2: " << duty_res.second << std::endl;
+
+  // get version (warning: likely brittle!)
+  std::cout << roboclaw_connections->get_version(addr) << std::endl;
+
+  
 
   return 0;
 }
