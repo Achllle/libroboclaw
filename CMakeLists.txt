@@ -36,7 +36,7 @@ target_include_directories(libroboclaw
 
 # add the executable
 add_executable(connect 
-    src/connect.cpp
+    examples/connect.cpp
 )
 
 # add binary tree for finding libroboclawConfig
