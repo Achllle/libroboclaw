@@ -27,6 +27,10 @@ int main(int argc, char *argv[]) {
   std::pair<int, int> enc_res = roboclaw_connections->get_encoders(addr);
   std::cout << "encoders: M1: " << enc_res.first << ", M2: " << enc_res.second << std::endl;
 
+  // get velocity
+  std::pair<int, int> vel_res = roboclaw_connections->get_velocity(addr);
+  std::cout << "velocity values: M1: " << vel_res.first << ", M2: " << vel_res.second << std::endl;
+
   // get pwm
   std::pair<int, int> pwm_res = roboclaw_connections->get_pwm(addr);
   std::cout << "pwm values: M1: " << pwm_res.first << ", M2: " << pwm_res.second << std::endl;
@@ -35,10 +39,20 @@ int main(int argc, char *argv[]) {
   std::pair<double, double> duty_res = roboclaw_connections->get_duty_cycle(addr);
   std::cout << "duty cycle: M1: " << duty_res.first << ", M2: " << duty_res.second << std::endl;
 
-  // get version (warning: likely brittle!)
-  std::cout << roboclaw_connections->get_version(addr) << std::endl;
+  // get current
+  std::pair<int, int> curr_res = roboclaw_connections->get_current(addr);
+  std::cout << "current: M1: " << curr_res.first << ", M2: " << curr_res.second << std::endl;
 
-  
+  // get error
+  int error_res = roboclaw_connections->get_error(addr);
+  std::cout << "error: " << error_res << std::endl;
+
+  // get max current
+  std::pair<int, int> max_curr_res = roboclaw_connections->get_max_current(addr);
+  std::cout << "max current: M1: " << max_curr_res.first << ", M2: " << max_curr_res.second << std::endl;
+
+  // get version (warning: brittle!)
+  std::cout << "version: " << roboclaw_connections->get_version(addr) << std::endl;
 
   return 0;
 }

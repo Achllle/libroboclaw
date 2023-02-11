@@ -55,9 +55,43 @@ namespace libroboclaw {
          */
         std::pair<double, double> get_duty_cycle(const unsigned char address);
 
+        /**
+         * Get the current in centiamps (10mA increments) from the 2 motors at a given address
+         e.g. a value of 3000 means 30 amps
+        */
+        std::pair<int, int> get_current(const unsigned char address);
+
+        /**
+         * Read errors if any are present
+         TODO: declare possibilities, use enum?
+        */
+        int get_error(const unsigned char address);
+
+        // config getters
+        /**
+         * Get the max current setting in centiamps from the 2 motors at a given address
+         e.g. a value of 3000 means 30 amps
+        */
+        std::pair<int, int> get_max_current(const unsigned char address);
+
         // Setters
+        /*
+         * Drive M1 and M2 in the same command using a signed speed value. The sign indicates which
+         * direction the motor will turn. This command is used to drive both motors by quad pulses per
+         * second. Different quadrature encoders will have different rates at which they generate the
+         * incoming pulses. The values used will differ from one encoder to another. Once a value is sent
+         * the motor will begin to accelerate as fast as possible until the rate defined is reached.
+         *
+         * 4 Bytes (long) are used to express the pulses per second. Quadrature encoders send 4 pulses
+         * per tick. So 1000 ticks would be counted as 4000 pulses. 
+        */
         void set_velocity(unsigned char address, std::pair<int, int> speed);
 
+        /*
+         * Drive both M1 and M2 using a duty cycle value. The duty cycle is used to control the speed of
+         * the motor without a quadrature encoder. 
+         * The duty value is signed and the range is +-1500. 
+        */
         void set_duty(unsigned char address, std::pair<int, int> duty);
 
         void reset_encoders(unsigned char address);

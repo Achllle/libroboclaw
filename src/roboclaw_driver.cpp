@@ -20,7 +20,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-
+#include <iostream>
 #include "libroboclaw/roboclaw_driver.h"
 
 #include <boost/thread/mutex.hpp>
@@ -65,6 +65,14 @@ namespace libroboclaw {
                         unsigned char *rx_data,
                         size_t rx_length,
                         bool tx_crc, bool rx_crc) {
+        /*
+         * All packet serial commands use a 7 bit checksum to prevent corrupt commands from being
+         * executed. Since the RoboClaw expects a 7bit value the 8th bit is masked. The checksum is
+         * calculated as follows:
+         * Checksum = (Address + Command + Data bytes) & 0x7F
+         * When calculating the checksum all data bytes sent or received must be added together. The
+         * hexadecimal value 0X7F is used to mask the 8th bit.
+        */
 
         boost::mutex::scoped_lock lock(serial_mutex);
 
@@ -112,8 +120,10 @@ namespace libroboclaw {
 
         unsigned char* response = (unsigned char*) &response_vector[0];
 
-        if (bytes_received != want_bytes)
-            throw timeout_exception("Timeout reading from RoboClaw");
+        if (bytes_received != want_bytes) {
+            std::cout << "error: " << bytes_received << " received vs " << want_bytes << " expected." << std::endl;
+            throw timeout_exception("Timeout reading from RoboClaw or # bytes mismatch");
+        }
 
         // Check CRC
         if (rx_crc) {
@@ -125,6 +135,7 @@ namespace libroboclaw {
             crc_received += response[bytes_received - 1];
 
             if (crc_calculated != crc_received) {
+                std::cout << "error: crc_calculated: " << crc_calculated << ", crc_received: " << crc_received << std::endl;
                 throw crc_exception("Roboclaw CRC mismatch");
             }
 
@@ -140,14 +151,52 @@ namespace libroboclaw {
     }
 
     std::string driver::get_version(unsigned char address) {
-        unsigned char rx_buffer[30];
-        txrx(address, 21, nullptr, 0, rx_buffer, 30, false, false);
-        std::string version = std::string(reinterpret_cast< char const * >(rx_buffer));
-        trim(version);
+        /*
+         * The command will return up to 32 bytes. The return string includes the product name and
+         * firmware version. The return string is terminated with a null (0) character.
+        */
+        // unsigned char rx_buffer[30];
+        // txrx(address, 21, nullptr, 0, rx_buffer, 30, false, false);
+        std::string version;
+        for (int i=0; i<32; i++){
+            unsigned char rx_buffer[i];
+            try {
+            txrx(address, 21, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+            version = std::string(reinterpret_cast< char const * >(rx_buffer));
+            trim(version);
+            } catch (...) {}
+        }
         return version;
     }
 
     std::pair<int, int> driver::get_encoders(unsigned char address) {
+        /*
+         * Read decoder M1 counter. Since CMD 16 is a read command it does not require a checksum.
+         * However a checksum value will be returned from RoboClaw and can be used to validate the data
+
+         * Send: [Address, CMD]
+         * Receive: [Value1.Byte3, Value1.Byte2, Value1.Byte1, Value1.Byte0, Value2, Checksum]
+
+         * The command will return 6 bytes. Byte 1,2,3 and 4 make up a long variable which is received
+         * MSB first and represents the current count which can be any value from 0 - 4,294,967,295. Each
+         * pulse from the quadrature encoder will increment or decrement the counter depending on the
+         * direction of rotation.
+
+         * Byte 5 is the status byte for M1 decoder. It tracks counter underflow, direction, overflow and if
+         * the encoder is operational. The byte value represents:
+         *      Bit0 - Counter Underflow (1= Underflow Occurred, Clear After Reading)
+         *      Bit1 - Direction (0 = Forward, 1 = Backwards)
+         *      Bit2 - Counter Overflow (1= Underflow Occurred, Clear After Reading)
+         *      Bit3 - Reserved
+         *      Bit4 - Reserved
+         *      Bit5 - Reserved
+         *      Bit6 - Reserved
+         *      Bit7 - Reserved
+         * Byte 6 is the checksum. It is calculated the same way as sending a command, Sum all the
+         * values sent and received except the checksum and mask the 8th bit.
+         * 
+         * Repeat for M2
+        */
 
         unsigned char rx_buffer[5];
 
@@ -224,12 +273,90 @@ namespace libroboclaw {
         return duty_cycle;
     }
 
+    std::pair<int, int> driver::get_current(const unsigned char address) {
+        /*
+         * Send: [Address, 49]
+         * Receive: [M1Cur.Byte1, M1Cur.Byte0, M2Cur.Byte1, M2Cur.Byte0, Checksum]
+
+         * The command will return 5 bytes. Bytes 1 and 2 combine to represent the current in 10ma
+         * increments of motor1. Bytes 3 and 4 combine to represent the current in 10ma increments of
+         * motor2 . Byte 5 is the checksum.
+        */
+        unsigned char rx_buffer[4];
+        uint16_t curr_1 = 0;
+        uint16_t curr_2 = 0;
+
+        txrx(address, 49, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
+
+        curr_1 += rx_buffer[0] << 8;
+        curr_1 += rx_buffer[1];
+        curr_2 += rx_buffer[2] << 8;
+        curr_2 += rx_buffer[3];
+
+        return std::pair<int, int>((int) (int16_t) curr_1, (int) (int16_t) curr_2);
+    }
+
+    int driver::get_error(const unsigned char address) {
+        /*
+         * Send: [Address, 90]
+         * Receive: [Error, Checksum]
+         * 
+         * Error Mask
+         *      Normal 0x00
+         *      M1 OverCurrent 0x01
+         *      M2 OverCurrent 0x02
+         *      E-Stop 0x04
+         *      Temperature 0x08
+         *      Main Battery High 0x10
+         *      Main Battery Low 0x20
+         *      Logic Battery High 0x40
+         *      Logic Battery Low 0x80
+        */
+        unsigned char rx_buffer[1];
+        uint8_t error = 0;
+        
+        txrx(address, 90, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+
+        error += rx_buffer[0];
+
+        return (int) error;
+    }
+
+    std::pair<int, int> driver::get_max_current(const unsigned char address) {
+        unsigned char rx_buffer[7];
+
+        // crc check doesn't work when dummy data involved, need to disable and allocate longer buffer
+        // so we don't eat into next msg
+        txrx(address, 135, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+
+        uint32_t max_curr_1 = 0;
+
+        max_curr_1 += rx_buffer[0] << 24;
+        max_curr_1 += rx_buffer[1] << 16;
+        max_curr_1 += rx_buffer[2] << 8;
+        max_curr_1 += rx_buffer[3];
+
+        txrx(address, 136, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+
+        uint32_t max_curr_2 = 0;
+
+        // offset indexing to deal with dummy data (see official Ardiono lib)
+        max_curr_2 += rx_buffer[3] << 24;
+        max_curr_2 += rx_buffer[4] << 16;
+        max_curr_2 += rx_buffer[5] << 8;
+        max_curr_2 += rx_buffer[6];
+
+        return std::pair<int, int>((int) (int32_t) max_curr_1, (int) (int32_t) max_curr_2);
+    }
+
     void driver::reset_encoders(unsigned char address) {
         unsigned char rx_buffer[1];
         txrx(address, 20, nullptr, 0, rx_buffer, sizeof(rx_buffer), true, false);
     }
 
     void driver::set_velocity(unsigned char address, std::pair<int, int> speed) {
+        /* Send: [Address, CMD, QspeedM1(4 Bytes), QspeedM2(4 Bytes), Checksum] */
+
         unsigned char rx_buffer[1];
         unsigned char tx_buffer[8];
 
@@ -248,6 +375,8 @@ namespace libroboclaw {
     }
 
     void driver::set_duty(unsigned char address, std::pair<int, int> duty) {
+        /* Send: [Address, CMD, DutyM1(2 Bytes), DutyM2(2 Bytes), Checksum] */
+
         unsigned char rx_buffer[1];
         unsigned char tx_buffer[4];
 
