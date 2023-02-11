@@ -140,16 +140,11 @@ namespace libroboclaw {
     }
 
     std::string driver::get_version(unsigned char address) {
-
-        unsigned char rx_buffer[48];
-
-        txrx(address, 21, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
-
+        unsigned char rx_buffer[30];
+        txrx(address, 21, nullptr, 0, rx_buffer, 30, false, false);
         std::string version = std::string(reinterpret_cast< char const * >(rx_buffer));
         trim(version);
-
         return version;
-
     }
 
     std::pair<int, int> driver::get_encoders(unsigned char address) {
