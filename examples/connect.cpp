@@ -44,12 +44,22 @@ int main(int argc, char *argv[]) {
   std::cout << "current: M1: " << curr_res.first << ", M2: " << curr_res.second << std::endl;
 
   // get error
-  int error_res = roboclaw_connections->get_error(addr);
+  int error_res = roboclaw_connections->get_status(addr);
   std::cout << "error: " << error_res << std::endl;
 
-  // get max current
-  std::pair<int, int> max_curr_res = roboclaw_connections->get_max_current(addr);
-  std::cout << "max current: M1: " << max_curr_res.first << ", M2: " << max_curr_res.second << std::endl;
+  // get config
+  int config = roboclaw_connections->get_config(addr);
+  std::cout << "config: " << config << std::endl;
+
+  // set config
+  roboclaw_connections->set_config(addr, 8355);
+  int new_config = roboclaw_connections->get_config(addr);
+  std::cout << "new config: " << new_config << std::endl;
+
+  // get max and min current
+  std::pair<std::pair<int, int>, std::pair<int, int>> max_min_curr_res = roboclaw_connections->get_current_limits(addr);
+  std::cout << "max current: M1: " << max_min_curr_res.first.first << ", M2: " << max_min_curr_res.second.first << std::endl;
+  std::cout << "min current: M1: " << max_min_curr_res.first.second << ", M2: " << max_min_curr_res.second.second << std::endl;
 
   // get version (warning: brittle!)
   std::cout << "version: " << roboclaw_connections->get_version(addr) << std::endl;

@@ -1,6 +1,6 @@
 /**
  *
- * Copyright (c) 2018 Carroll Vance.
+ * Copyright (c) 2018 Carroll Vance, Achille Verheye
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -24,8 +24,6 @@
 #include "libroboclaw/roboclaw_driver.h"
 
 #include <boost/thread/mutex.hpp>
-#include <boost/bind.hpp>
-#include <boost/array.hpp>
 
 namespace libroboclaw {
 
@@ -69,15 +67,22 @@ namespace libroboclaw {
          * All packet serial commands use a 7 bit checksum to prevent corrupt commands from being
          * executed. Since the RoboClaw expects a 7bit value the 8th bit is masked. The checksum is
          * calculated as follows:
-         * Checksum = (Address + Command + Data bytes) & 0x7F
+         * Checksum = (Address + Command + Data bytes sent + Data bytes read ) & 0x7F
          * When calculating the checksum all data bytes sent or received must be added together. The
          * hexadecimal value 0X7F is used to mask the 8th bit.
         */
+        // usleep(1000);
+        // ioctl(0x80->fd, TCFLSH, 0); // flush receive
+        // ioctl(0x80, TCFLSH, 1); // flush transmit
+        // ioctl(0x80, TCFLSH, 2); // flush both
+        usleep(15000);
 
         boost::mutex::scoped_lock lock(serial_mutex);
 
         std::vector<unsigned char> packet;
 
+        // minimum packet size is 2 (address byte and command byte). Add two bytes for 16bit crc
+        // when using transmission checksum
         if (tx_crc)
             packet.resize(tx_length + 4);
         else
@@ -117,6 +122,9 @@ namespace libroboclaw {
         response_vector = serial->read(want_bytes);
 
         size_t bytes_received = response_vector.size();
+        // for (char i:response_vector)
+        //     std::cout << (int) i << ' ';
+        // std::cout << std::endl;
 
         unsigned char* response = (unsigned char*) &response_vector[0];
 
@@ -127,8 +135,8 @@ namespace libroboclaw {
 
         // Check CRC
         if (rx_crc) {
-            unsigned int crc_calculated = crc16(&response[0], bytes_received - 2);
-            unsigned int crc_received = 0;
+            uint16_t crc_calculated = crc16(&response[0], bytes_received - 2);
+            uint16_t crc_received = 0;
 
             // RoboClaw generates big endian / MSB first
             crc_received += response[bytes_received - 2] << 8;
@@ -296,67 +304,89 @@ namespace libroboclaw {
         return std::pair<int, int>((int) (int16_t) curr_1, (int) (int16_t) curr_2);
     }
 
-    int driver::get_error(const unsigned char address) {
+    int driver::get_status(const unsigned char address) {
         /*
          * Send: [Address, 90]
-         * Receive: [Error, Checksum]
-         * 
-         * Error Mask
-         *      Normal 0x00
-         *      M1 OverCurrent 0x01
-         *      M2 OverCurrent 0x02
-         *      E-Stop 0x04
-         *      Temperature 0x08
-         *      Main Battery High 0x10
-         *      Main Battery Low 0x20
-         *      Logic Battery High 0x40
-         *      Logic Battery Low 0x80
+         * Receive: [Status (4 bytes), CRC(2 bytes)]
         */
-        unsigned char rx_buffer[1];
-        uint8_t error = 0;
+        unsigned char rx_buffer[4];
+        uint32_t error = 0;
         
-        txrx(address, 90, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+        txrx(address, 90, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
 
-        error += rx_buffer[0];
+        error += rx_buffer[0] << 24;
+        error += rx_buffer[1] << 16;
+        error += rx_buffer[2] << 8;
+        error += rx_buffer[3];
 
         return (int) error;
     }
 
-    std::pair<int, int> driver::get_max_current(const unsigned char address) {
-        unsigned char rx_buffer[7];
+    int driver::get_config(const unsigned char address) {
+        /*
+         * Send: [Address, 99]
+         * Receive: [Config (2 bytes), CRC(2 bytes)]
+        */
+        unsigned char rx_buffer[2];
+        uint16_t config = 0;
+        
+        txrx(address, 99, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
 
-        // crc check doesn't work when dummy data involved, need to disable and allocate longer buffer
-        // so we don't eat into next msg
-        txrx(address, 135, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+        config += rx_buffer[0] << 8;
+        config += rx_buffer[1];
+
+        return (int) config;
+    }
+
+    pair2<int> driver::get_current_limits(const unsigned char address) {
+        /*
+         * Send: [Address, 135 (M1) / 136 (M2)]
+         * Receive: [MaxCurrent(4 bytes), MinCurrent(4 bytes), CRC(2 bytes)]
+        */
+        unsigned char rx_buffer[8];
+
+        txrx(address, 135, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
 
         uint32_t max_curr_1 = 0;
-
         max_curr_1 += rx_buffer[0] << 24;
         max_curr_1 += rx_buffer[1] << 16;
         max_curr_1 += rx_buffer[2] << 8;
         max_curr_1 += rx_buffer[3];
 
-        txrx(address, 136, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, false);
+        uint32_t min_curr_1 = 0;
+        min_curr_1 += rx_buffer[4] << 24;
+        min_curr_1 += rx_buffer[5] << 16;
+        min_curr_1 += rx_buffer[6] << 8;
+        min_curr_1 += rx_buffer[7];
+
+        std::pair<int, int> max_min1;
+        max_min1 = std::pair<int, int>((int) (int32_t) max_curr_1, (int) (int32_t) min_curr_1);
+
+        txrx(address, 136, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
 
         uint32_t max_curr_2 = 0;
+        max_curr_2 += rx_buffer[0] << 24;
+        max_curr_2 += rx_buffer[1] << 16;
+        max_curr_2 += rx_buffer[2] << 8;
+        max_curr_2 += rx_buffer[3];
 
-        // offset indexing to deal with dummy data (see official Ardiono lib)
-        max_curr_2 += rx_buffer[3] << 24;
-        max_curr_2 += rx_buffer[4] << 16;
-        max_curr_2 += rx_buffer[5] << 8;
-        max_curr_2 += rx_buffer[6];
+        uint32_t min_curr_2 = 0;
+        min_curr_2 += rx_buffer[4] << 24;
+        min_curr_2 += rx_buffer[5] << 16;
+        min_curr_2 += rx_buffer[6] << 8;
+        min_curr_2 += rx_buffer[7];
 
-        return std::pair<int, int>((int) (int32_t) max_curr_1, (int) (int32_t) max_curr_2);
-    }
+        std::pair<int, int> max_min2;
+        max_min2 = std::pair<int, int>((int) (int32_t) max_curr_2, (int) (int32_t) min_curr_2);
 
-    void driver::reset_encoders(unsigned char address) {
-        unsigned char rx_buffer[1];
-        txrx(address, 20, nullptr, 0, rx_buffer, sizeof(rx_buffer), true, false);
+        return pair2<int>(max_min1, max_min2);
     }
 
     void driver::set_velocity(unsigned char address, std::pair<int, int> speed) {
-        /* Send: [Address, CMD, QspeedM1(4 Bytes), QspeedM2(4 Bytes), Checksum] */
-
+        /* 
+         * Send: [Address, CMD, QspeedM1(4 Bytes), QspeedM2(4 Bytes), Checksum] 
+         * Receive: [0xFF]
+        */
         unsigned char rx_buffer[1];
         unsigned char tx_buffer[8];
 
@@ -375,8 +405,10 @@ namespace libroboclaw {
     }
 
     void driver::set_duty(unsigned char address, std::pair<int, int> duty) {
-        /* Send: [Address, CMD, DutyM1(2 Bytes), DutyM2(2 Bytes), Checksum] */
-
+        /*
+         * Send: [Address, CMD, DutyM1(2 Bytes), DutyM2(2 Bytes), CRC(2 bytes)]
+         * Receive: [0xFF]
+        */
         unsigned char rx_buffer[1];
         unsigned char tx_buffer[4];
 
@@ -388,6 +420,30 @@ namespace libroboclaw {
         tx_buffer[3] = (unsigned char) (duty.second & 0xFF);
 
         txrx(address, 34, tx_buffer, sizeof(tx_buffer), rx_buffer, sizeof(rx_buffer), true, false);
+    }
+
+    void driver::reset_encoders(unsigned char address) {
+        /*
+         * Send: [Address, CMD]
+         * Receive: [0xFF]
+        */
+        unsigned char rx_buffer[1];
+        txrx(address, 20, nullptr, 0, rx_buffer, sizeof(rx_buffer), true, false);
+    }
+
+    void driver::set_config(unsigned char address, int config) {
+        /*
+         * Send: [Address, 98, Config(2 bytes), CRC(2 bytes)]
+         * Receive: [0xFF]
+        */
+        unsigned char rx_buffer[1];
+        unsigned char tx_buffer[2];
+
+        // RoboClaw expects big endian / MSB first
+        tx_buffer[0] = (unsigned char) ((config >> 8) & 0xFF);
+        tx_buffer[1] = (unsigned char) (config & 0xFF);
+
+        txrx(address, 98, tx_buffer, sizeof(tx_buffer), rx_buffer, sizeof(rx_buffer), true, false);
     }
 
 }

@@ -1,6 +1,7 @@
 # libroboclaw
 
-Interface for roboclaw motor drivers. Cleaner rewrite of the serial interface.
+Interface for roboclaw motor drivers. Cleaner rewrite of the serial interface with a focus on easy access to common methods
+with solid documentation.
 
 based on [this repo](https://github.com/csvance/roboclaw).
 
