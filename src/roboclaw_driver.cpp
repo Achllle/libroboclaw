@@ -446,4 +446,39 @@ namespace libroboclaw {
         txrx(address, 98, tx_buffer, sizeof(tx_buffer), rx_buffer, sizeof(rx_buffer), true, false);
     }
 
+    void driver::set_serial_timeout(unsigned char address, float timeout) {
+        /*
+         * Send: [Address, 14, Timeout(1 byte), CRC(2 bytes)]
+         * Receive: [0xFF]
+         * 
+         * Timeout is in 0.1 second increments. Valid range is 0-255 (0-25.5 seconds).
+         * A value of 0 disables the timeout. When enabled, motors will stop if no
+         * command is received within the timeout period.
+        */
+        unsigned char rx_buffer[1];
+        unsigned char tx_buffer[1];
+
+        // Clamp to valid range (0-25.5 seconds)
+        if (timeout < 0) timeout = 0;
+        if (timeout > 25.5f) timeout = 25.5f;
+
+        tx_buffer[0] = (unsigned char)(timeout * 10);
+
+        txrx(address, 14, tx_buffer, sizeof(tx_buffer), rx_buffer, sizeof(rx_buffer), true, false);
+    }
+
+    float driver::get_serial_timeout(unsigned char address) {
+        /*
+         * Send: [Address, 15]
+         * Receive: [Timeout(1 byte), CRC(2 bytes)]
+         * 
+         * Returns the timeout value in 0.1 second increments.
+        */
+        unsigned char rx_buffer[1];
+
+        txrx(address, 15, nullptr, 0, rx_buffer, sizeof(rx_buffer), false, true);
+
+        return (float)rx_buffer[0] / 10.0f;
+    }
+
 }

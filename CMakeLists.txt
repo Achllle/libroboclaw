@@ -48,3 +48,17 @@ target_link_libraries(connect
     PRIVATE
         libroboclaw
 )
+
+# add the timeout test executable
+add_executable(timeout_test 
+    examples/timeout_test.cpp
+)
+
+target_include_directories(timeout_test PUBLIC
+                           "${PROJECT_BINARY_DIR}"
+)
+
+target_link_libraries(timeout_test
+    PRIVATE
+        libroboclaw
+)

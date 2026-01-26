@@ -169,6 +169,21 @@ namespace libroboclaw {
         */
         void set_duty(unsigned char address, std::pair<int, int> duty);
 
+        /**
+         * Set the serial timeout on the RoboClaw.
+         * When enabled, motors will stop if no command is received within the timeout period.
+         * @param address Controller address (128-135)
+         * @param timeout Timeout in seconds (0-25.5). 0 disables timeout.
+         */
+        void set_serial_timeout(unsigned char address, float timeout);
+
+        /**
+         * Get the current serial timeout setting from the RoboClaw.
+         * @param address Controller address (128-135)
+         * @return Timeout in seconds (0-25.5). 0 means timeout disabled.
+         */
+        float get_serial_timeout(unsigned char address);
+
         /*
          * Set config bits for standard settings.
          * For possible values, see get_config
